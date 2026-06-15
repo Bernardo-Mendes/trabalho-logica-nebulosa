@@ -5,10 +5,8 @@ from skfuzzy import control as ctrl
 import matplotlib
 import matplotlib.pyplot as plt
 
-# Configure matplotlib to run headlessly
 matplotlib.use('Agg')
 
-# Page Configuration
 st.set_page_config(
     page_title="Triagem Fuzzy Hospitalar",
     page_icon="🩺",
@@ -49,11 +47,9 @@ try:
 except TypeError as erro_original:
     raise TypeError(f"Falha de renderização no Streamlit: O parâmetro fornecido para permitir HTML é inválido. Verifique possíveis erros de digitação no nome do argumento. Erro base: {erro_original}")
 
-# Application Header
 st.markdown('<p class="main-title">🩺 Sistema de Triagem Hospitalar Inteligente</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">Motor de Inferência Fuzzy para Classificação de Urgência Baseado em Sinais Vitais</p>', unsafe_allow_html=True)
 
-# Initialize Session State for Patient Vitals
 if 'val_temp' not in st.session_state:
     st.session_state['val_temp'] = 36.5
 if 'val_oxim' not in st.session_state:
@@ -65,10 +61,8 @@ if 'val_pas' not in st.session_state:
 if 'val_dor' not in st.session_state:
     st.session_state['val_dor'] = 2
 
-# Sidebar Title
 
 st.sidebar.markdown("## 📋 Dados do Paciente & Calibração")
-# Presets Dropdown
 st.sidebar.markdown("### 🧬 Casos Clínicos (Presets)")
 preset = st.sidebar.selectbox("Carregar caso de teste:", [
     "Personalizado (Ajuste Manual)",
@@ -80,7 +74,6 @@ preset = st.sidebar.selectbox("Carregar caso de teste:", [
     "Caso 6: Hipotermia Grave"
 ], key='preset_selector')
 
-# Handle Preset Selection
 if 'last_preset' not in st.session_state:
     st.session_state['last_preset'] = "Personalizado (Ajuste Manual)"
 
@@ -123,7 +116,6 @@ if preset != st.session_state['last_preset']:
         st.session_state['val_pas'] = 95
         st.session_state['val_dor'] = 2
 
-# Patient Input Boxes
 st.sidebar.markdown("### 🩸 Sinais Vitais do Paciente")
 input_temp = st.sidebar.number_input("Temperatura (°C)", min_value=34.0, max_value=43.0, step=0.1, key='val_temp')
 input_oxim = st.sidebar.number_input("Oximetria (SpO2 %)", min_value=50, max_value=100, step=1, key='val_oxim')
@@ -131,7 +123,7 @@ input_fc = st.sidebar.number_input("Frequência Cardíaca (bpm)", min_value=30, 
 input_pas = st.sidebar.number_input("Pressão Arterial Sistólica (mmHg)", min_value=50, max_value=200, step=1, key='val_pas')
 input_dor = st.sidebar.number_input("Nível de Dor (0 a 10)", min_value=0, max_value=10, step=1, key='val_dor')
 
-# Calibration Panel (Collapsible Expander)
+# Calibração dos Limites Fuzzy
 with st.sidebar.expander("⚙️ Calibração dos Limites Fuzzy", expanded=False):
     st.write("Ajuste os pontos de transição das variáveis linguísticas em tempo real:")
     
@@ -155,7 +147,7 @@ with st.sidebar.expander("⚙️ Calibração dos Limites Fuzzy", expanded=False
     lim_dor_leve = st.slider("Dor Leve até:", 1, 5, 3, step=1)
     lim_dor_seve = st.slider("Dor Severa a partir de:", 6, 9, 7, step=1)
 
-# Building Fuzzy Inference System Dynamically
+# FIS
 x_temp = np.arange(34.0, 43.1, 0.1)
 x_oxim = np.arange(50, 101, 1)
 x_fc = np.arange(30, 201, 1)
@@ -163,7 +155,7 @@ x_pas = np.arange(50, 201, 1)
 x_dor = np.arange(0, 11, 1)
 x_urg = np.arange(0, 101, 1)
 
-# Fuzzy Variables
+# Variáveis fuzzy
 temp = ctrl.Antecedent(x_temp, 'temperatura')
 oxim = ctrl.Antecedent(x_oxim, 'oximetria')
 fc = ctrl.Antecedent(x_fc, 'frequencia_cardiaca')
@@ -171,76 +163,74 @@ pas = ctrl.Antecedent(x_pas, 'pressao_sistolica')
 dor = ctrl.Antecedent(x_dor, 'dor')
 urgencia = ctrl.Consequent(x_urg, 'urgencia')
 
-# Define membership functions based on calibration parameters
-# 1. Temperatura
+# Funções
+# Temperatura
 temp['hipotermia'] = fuzz.trapmf(temp.universe, [34.0, 34.0, lim_t_hipo - 0.5, lim_t_hipo])
 temp['normal'] = fuzz.trimf(temp.universe, [lim_t_hipo - 0.5, (lim_t_hipo + lim_t_febre)/2, lim_t_febre + 0.5])
 temp['febre'] = fuzz.trapmf(temp.universe, [lim_t_febre, lim_t_febre + 0.5, 43.0, 43.0])
 
-# 2. Oximetria
+# Oximetria
 oxim['critica'] = fuzz.trapmf(oxim.universe, [50, 50, lim_o_crit - 2, lim_o_crit])
 oxim['limitrofe'] = fuzz.trimf(oxim.universe, [lim_o_crit - 2, (lim_o_crit + lim_o_norm)/2, lim_o_norm + 1])
 oxim['normal'] = fuzz.trapmf(oxim.universe, [lim_o_norm, lim_o_norm + 1, 100, 100])
 
-# 3. Frequência Cardíaca
+# Frequência Cardíaca
 fc['bradicardia'] = fuzz.trapmf(fc.universe, [30, 30, lim_fc_bradi - 10, lim_fc_bradi])
 fc['normal'] = fuzz.trimf(fc.universe, [lim_fc_bradi - 5, (lim_fc_bradi + lim_fc_taqui)/2, lim_fc_taqui + 10])
 fc['taquicardia'] = fuzz.trapmf(fc.universe, [lim_fc_taqui, lim_fc_taqui + 10, 200, 200])
 
-# 4. Pressão Arterial
+# Pressão Arterial
 pas['hipotensao'] = fuzz.trapmf(pas.universe, [50, 50, lim_pas_hipo - 10, lim_pas_hipo])
 pas['normal'] = fuzz.trimf(pas.universe, [lim_pas_hipo - 5, (lim_pas_hipo + lim_pas_hiper)/2, lim_pas_hiper + 15])
 pas['hipertensao'] = fuzz.trapmf(pas.universe, [lim_pas_hiper, lim_pas_hiper + 10, 200, 200])
 
-# 5. Dor
+# Dor
 dor['leve'] = fuzz.trapmf(dor.universe, [0, 0, lim_dor_leve, lim_dor_leve + 1])
 dor['moderada'] = fuzz.trimf(dor.universe, [lim_dor_leve, (lim_dor_leve + lim_dor_seve)/2, lim_dor_seve + 1])
 dor['severa'] = fuzz.trapmf(dor.universe, [lim_dor_seve, lim_dor_seve + 1, 10, 10])
 
-# Output: Urgencia
+# Urgencia
 urgencia['nao_urgente'] = fuzz.trimf(urgencia.universe, [0, 15, 35])
 urgencia['pouco_urgente'] = fuzz.trimf(urgencia.universe, [25, 45, 65])
 urgencia['muito_urgente'] = fuzz.trimf(urgencia.universe, [55, 75, 85])
 urgencia['emergencia'] = fuzz.trapmf(urgencia.universe, [75, 90, 100, 100])
 
-# Define Rule Base
+# Regra Base
 rules = [
-    # Emergência (Red)
+    # Emergência
     ctrl.Rule(oxim['critica'], urgencia['emergencia'], label='R1: Oximetria Crítica -> Emergência'),
     ctrl.Rule(temp['febre'] & fc['taquicardia'], urgencia['emergencia'], label='R2: Febre & Taquicardia -> Emergência'),
     ctrl.Rule(pas['hipotensao'] & fc['taquicardia'], urgencia['emergencia'], label='R3: Choque (Hipotensão & Taquicardia) -> Emergência'),
     ctrl.Rule(pas['hipotensao'] & temp['hipotermia'], urgencia['emergencia'], label='R4: Hipotensão & Hipotermia -> Emergência'),
     
-    # Muito Urgente (Orange)
+    # Muito Urgente
     ctrl.Rule(oxim['limitrofe'], urgencia['muito_urgente'], label='R5: Oximetria Limítrofe -> Muito Urgente'),
     ctrl.Rule(temp['hipotermia'], urgencia['muito_urgente'], label='R6: Hipotermia isolada -> Muito Urgente'),
     ctrl.Rule(fc['bradicardia'], urgencia['muito_urgente'], label='R7: Bradicardia grave -> Muito Urgente'),
     ctrl.Rule(dor['severa'] & temp['febre'], urgencia['muito_urgente'], label='R8: Dor Severa & Febre -> Muito Urgente'),
     ctrl.Rule(dor['severa'] & pas['hipertensao'], urgencia['muito_urgente'], label='R9: Dor Severa & Hipertensão -> Muito Urgente'),
     
-    # Pouco Urgente (Yellow/Green)
+    # Pouco Urgente
     ctrl.Rule(temp['febre'] & fc['normal'], urgencia['pouco_urgente'], label='R10: Febre isolada com FC Normal -> Pouco Urgente'),
     ctrl.Rule(pas['hipertensao'] & fc['normal'], urgencia['pouco_urgente'], label='R11: Hipertensão isolada com FC Normal -> Pouco Urgente'),
     ctrl.Rule(dor['moderada'], urgencia['pouco_urgente'], label='R12: Dor Moderada -> Pouco Urgente'),
     ctrl.Rule(dor['severa'] & temp['normal'] & oxim['normal'], urgencia['pouco_urgente'], label='R13: Dor Severa com sinais vitais Normais -> Pouco Urgente'),
     
-    # Não Urgente (Blue/Green)
+    # Não Urgente
     ctrl.Rule(temp['normal'] & fc['normal'] & pas['normal'] & oxim['normal'] & dor['leve'], urgencia['nao_urgente'], label='R14: Todos os parâmetros Normais & Dor Leve -> Não Urgente'),
     ctrl.Rule(temp['normal'] & fc['normal'] & oxim['normal'] & dor['leve'], urgencia['nao_urgente'], label='R15: Sinais Vitais Normais & Dor Leve -> Não Urgente')
 ]
 
-# Set up the control system and simulation
 hospital_system = ctrl.ControlSystem(rules)
 triage_sim = ctrl.ControlSystemSimulation(hospital_system)
 
-# Feed the inputs to the simulator
 triage_sim.input['temperatura'] = input_temp
 triage_sim.input['oximetria'] = input_oxim
 triage_sim.input['frequencia_cardiaca'] = input_fc
 triage_sim.input['pressao_sistolica'] = input_pas
 triage_sim.input['dor'] = input_dor
 
-# Run fuzzy simulation
+# Simulação Fuzzy
 try:
     triage_sim.compute()
     result_urgencia = triage_sim.output['urgencia']
@@ -278,40 +268,39 @@ grades = {
     }
 }
 
-# Determine triage group, color and properties based on urgency score (0-100)
+# Output de urgência
 if result_urgencia < 25:
     triage_name = "NÃO URGENTE"
-    triage_color = "#2ecc71" # Green
+    triage_color = "#2ecc71"
     triage_text_color = "#ffffff"
     wait_time = "Atendimento em até 240 minutos"
     triage_desc = "Paciente está estável e pode aguardar o atendimento clínico de rotina de forma segura."
 elif result_urgencia < 50:
     triage_name = "POUCO URGENTE"
-    triage_color = "#f1c40f" # Yellow
+    triage_color = "#f1c40f"
     triage_text_color = "#000000"
     wait_time = "Atendimento em até 120 minutos"
     triage_desc = "Paciente apresenta sintomas de gravidade moderada, necessitando de reavaliação periódica."
 elif result_urgencia < 75:
     triage_name = "MUITO URGENTE"
-    triage_color = "#e67e22" # Orange
+    triage_color = "#e67e22"
     triage_text_color = "#ffffff"
     wait_time = "Atendimento em até 10 minutos"
     triage_desc = "Paciente apresenta sinais clínicos graves com risco moderado de evolução para óbito."
 else:
     triage_name = "EMERGÊNCIA / CRÍTICO"
-    triage_color = "#e74c3c" # Red
+    triage_color = "#e74c3c"
     triage_text_color = "#ffffff"
     wait_time = "Atendimento IMEDIATO"
     triage_desc = "Estado de altíssima gravidade com risco iminente de morte. Canalizar todos os recursos para intervenção imediata."
 
-# Create Tabbed Panel Layout on the main page
 tab_res, tab_plots, tab_rules = st.tabs([
     "📊 Resultado da Triagem",
     "📈 Gráficos de Sinais Vitais",
     "📜 Regras & Calibração"
 ])
 
-# ----------------- TAB 1: RESULTADO DA TRIAGEM -----------------
+# TAB 1: RESULTADO DA TRIAGEM
 with tab_res:
     if sim_error:
         st.error(f"⚠️ Erro ao simular o sistema fuzzy: {sim_error}. Certifique-se de que os limites estão configurados de forma que permitam o acionamento de pelo menos uma regra.")
@@ -329,7 +318,6 @@ with tab_res:
             </div>
         """, unsafe_allow_html=True)
         
-        # Simple progress representing score
         st.metric(label="Pontuação de Urgência", value=f"{result_urgencia:.1f}/100")
         
     with col_desc:
@@ -346,7 +334,6 @@ with tab_res:
 
     st.markdown("---")
     
-    # Mathematical Justification section
     st.markdown('<p class="report-title">🧮 Detalhamento Matemático (Graus de Pertinência)</p>', unsafe_allow_html=True)
     st.write(r"Abaixo está detalhado o grau de pertinência $\mu(x)$ de cada sinal vital coletado em relação aos conjuntos nebulosos definidos. Um valor de `1.00` representa pertinência total e `0.00` representa nenhuma pertinência.")
     
@@ -367,7 +354,7 @@ with tab_res:
             st.write(f"- {term}: `{val:.2f}`")
             st.progress(float(val))
             
-        # Calculate Rule Activations
+        # Explicação das Regras
         rule_activations = [
             ("R1: Oximetria Crítica", grades['Oximetria']['Crítica'], "Emergência"),
             ("R2: Febre & Taquicardia", min(grades['Temperatura']['Febre'], grades['Frequência Cardíaca']['Taquicardia']), "Emergência"),
@@ -386,7 +373,6 @@ with tab_res:
             ("R15: Sinais Normais & Dor Leve", min(grades['Temperatura']['Normal'], grades['Frequência Cardíaca']['Normal'], grades['Oximetria']['Normal'], grades['Nível de Dor']['Leve']), "Não Urgente")
         ]
         
-        # Filter rules that were actually triggered (strength > 0)
         active_rules = [(name, strength, cons) for name, strength, cons in rule_activations if strength > 0]
         active_rules.sort(key=lambda x: x[1], reverse=True)
         
@@ -399,20 +385,17 @@ with tab_res:
 
     st.markdown("---")
     
-    # Consequent Visualizer
     st.markdown('<p class="report-title">📐 Gráfico de Defuzzificação (Método do Centroide)</p>', unsafe_allow_html=True)
     st.write("O gráfico abaixo mostra as funções de pertinência do Nível de Urgência de saída. A área sombreada em cinza representa a agregação das regras ativadas cortadas no nível de seus respectivos coeficientes. A linha roxa marca a coordenada do **Centróide** resultante, que representa a nota numérica final de urgência:")
     
-    # Capture scikit-fuzzy's built-in beautiful defuzzification output plot
+    # Gráfico defuzzification
     plt.figure()
     fig, ax = plt.subplots(figsize=(10, 4))
     
-    # Plot standard output curves
     colors = {'nao_urgente': '#2ecc71', 'pouco_urgente': '#f1c40f', 'muito_urgente': '#e67e22', 'emergencia': '#e74c3c'}
     for term_name, term_obj in urgencia.terms.items():
         ax.plot(urgencia.universe, term_obj.mf, label=term_name.replace('_', ' ').title(), color=colors.get(term_name, '#34495e'), linewidth=1.5, linestyle=':')
     
-    # Render view output using skfuzzy built-in which shades the active area
     try:
         urgencia.view(sim=triage_sim)
         fig_urg = plt.gcf()
@@ -420,7 +403,6 @@ with tab_res:
         st.pyplot(fig_urg)
         plt.close(fig_urg)
     except Exception as e:
-        # Fallback manual plot if view fails
         ax.axvline(x=result_urgencia, color='#8e44ad', linestyle='-', linewidth=3, label=f'Centróide = {result_urgencia:.1f}')
         ax.set_title("Nível de Urgência")
         ax.set_ylim(-0.05, 1.05)
@@ -428,12 +410,11 @@ with tab_res:
         st.pyplot(fig)
         plt.close(fig)
 
-# ----------------- TAB 2: GRÁFICOS DE SINAIS VITAIS -----------------
+# TAB 2: GRÁFICOS DE SINAIS VITAIS
 with tab_plots:
     st.markdown('<p class="report-title">📈 Visualização das Funções de Pertinência e Estados do Paciente</p>', unsafe_allow_html=True)
     st.write("Os gráficos abaixo ilustram a modelagem matemática das curvas nebulosas e indicam a posição exata do paciente em cada sinal vital (linha vertical tracejada):")
     
-    # Custom plotting helper function
     def make_custom_plot(universe, fuzzy_var, current_val, title, unit, color_scheme):
         fig, ax = plt.subplots(figsize=(6, 2.5))
         for (term_name, term_obj), col in zip(fuzzy_var.terms.items(), color_scheme):
@@ -449,14 +430,13 @@ with tab_plots:
         plt.tight_layout()
         return fig
 
-    # Row 1 of plots
     row1_col1, row1_col2 = st.columns(2)
     
     with row1_col1:
         fig1 = make_custom_plot(
             x_temp, temp, input_temp, 
             "Temperatura Corporal", "°C", 
-            ['#3498db', '#2ecc71', '#e74c3c'] # blue, green, red
+            ['#3498db', '#2ecc71', '#e74c3c'] 
         )
         st.pyplot(fig1)
         plt.close(fig1)
@@ -465,7 +445,7 @@ with tab_plots:
         fig2 = make_custom_plot(
             x_oxim, oxim, input_oxim, 
             "Saturação de Oxigênio (Oximetria SpO2)", "%", 
-            ['#e74c3c', '#f1c40f', '#2ecc71'] # red, yellow, green
+            ['#e74c3c', '#f1c40f', '#2ecc71'] 
         )
         st.pyplot(fig2)
         plt.close(fig2)
@@ -477,7 +457,7 @@ with tab_plots:
         fig3 = make_custom_plot(
             x_fc, fc, input_fc, 
             "Frequência Cardíaca (Pulso)", " bpm", 
-            ['#3498db', '#2ecc71', '#e74c3c'] # blue, green, red
+            ['#3498db', '#2ecc71', '#e74c3c'] 
         )
         st.pyplot(fig3)
         plt.close(fig3)
@@ -486,12 +466,11 @@ with tab_plots:
         fig4 = make_custom_plot(
             x_pas, pas, input_pas, 
             "Pressão Arterial Sistólica (Sistólica)", " mmHg", 
-            ['#e74c3c', '#2ecc71', '#9b59b6'] # red, green, purple
+            ['#e74c3c', '#2ecc71', '#9b59b6'] #
         )
         st.pyplot(fig4)
         plt.close(fig4)
 
-    # Row 3 of plots (Pain Level)
     st.markdown("---")
     row3_col1, row3_col2 = st.columns([1.5, 1])
     
@@ -499,7 +478,7 @@ with tab_plots:
         fig5 = make_custom_plot(
             x_dor, dor, input_dor, 
             "Escala Visual Analógica de Dor", "/10", 
-            ['#2ecc71', '#f39c12', '#e74c3c'] # green, orange, red
+            ['#2ecc71', '#f39c12', '#e74c3c']
         )
         st.pyplot(fig5)
         plt.close(fig5)
@@ -513,12 +492,11 @@ with tab_plots:
             - O sistema combina essas frações em múltiplos antecedentes usando regras booleanas modificadas ($\min$ para conjunções 'E' e $\max$ para disjunções 'OU') para gerar a urgência ponderada final.
         """)
 
-# ----------------- TAB 3: REGRAS & CALIBRAÇÃO -----------------
+# TAB 3: REGRAS & CALIBRAÇÃO
 with tab_rules:
     st.markdown('<p class="report-title">📜 Base de Regras de Inferência Nebulosa</p>', unsafe_allow_html=True)
     st.write("A base de regras mapeia os sinais vitais linguísticos em graus clínicos de urgência, baseando-se em diretrizes médicas de triagem (como o protocolo de Manchester):")
     
-    # Table of current rules
     rule_data = []
     for r in rules:
         rule_data.append({
